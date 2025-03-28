@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'config/theme/app_theme.dart';  // テーマをインポート
+import 'config/theme/app_theme.dart';
 import 'screens/task.dart';
 import 'screens/battle.dart';
 import 'screens/status.dart';
@@ -11,9 +11,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      // カスタムテーマを適用
       theme: AppTheme.light(),
-      // NavigaionBarのClassを呼び出す
       home: const BottomNavigation(),
     );
   }
@@ -27,13 +25,12 @@ class BottomNavigation extends StatefulWidget {
 }
 
 class _BottomNavigationState extends State<BottomNavigation> {
-  // 各画面のリスト
   static const _screens = [
     TaskScreen(),
-    BattleScreen(),
-    StatusScreen()
+    // BattleScreen(),
+    StatusScreen(),
   ];
-  // 選択されている画面のインデックス
+  
   int _selectedIndex = 0;
 
   @override
@@ -41,32 +38,29 @@ class _BottomNavigationState extends State<BottomNavigation> {
     final ThemeData theme = Theme.of(context);
     return Scaffold(
       body: _screens[_selectedIndex],
-      // 本題のNavigationBar
       bottomNavigationBar: NavigationBar(
-        // タップされたタブのインデックスを設定
         onDestinationSelected: (int index) {
           setState(() {
             _selectedIndex = index;
           });
         },
-        // テーマからセカンダリカラーを取得して使用
-        indicatorColor: theme.colorScheme.secondary,  // ここを変更
+        indicatorColor: theme.colorScheme.secondary,
         selectedIndex: _selectedIndex,
         destinations: const <Widget>[
           NavigationDestination(
             icon: Icon(Icons.task_alt),
             label: 'Task',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.sports_martial_arts),
-            label: 'Battle',
-          ),
+          // NavigationDestination(
+          //   icon: Icon(Icons.sports_martial_arts),
+          //   label: 'Battle',
+          // ),
           NavigationDestination(
             icon: Icon(Icons.face),
             label: 'Status',
           ),
         ],
-      )
+      ),
     );
   }
 }
