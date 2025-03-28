@@ -19,12 +19,13 @@ class _TaskScreenState extends State<TaskScreen> {
   DateTime _startTime = DateTime.now();
   int _durationMinutes = 30;
 
-  // Firestoreからタスクを取得
+  // Firestoreから未完了のタスクのみを取得
   Stream<QuerySnapshot> _fetchTasks() {
-    print('Firestoreからタスクの取得を開始します');
+    print('Firestoreから未完了のタスクの取得を開始します');
     return _firestore
         .collection('tasks')
-        .orderBy('createdAt', descending: true)
+        .where('isCompleted', isEqualTo: false) // 未完了のタスクのみを取得
+        // orderByを削除して複合インデックスの必要性を回避
         .snapshots();
   }
 

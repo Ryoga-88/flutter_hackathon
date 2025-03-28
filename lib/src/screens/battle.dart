@@ -21,16 +21,84 @@ class _BattleScreenState extends State<BattleScreen> {
   bool _isTaskCompleted = false;
   double _completionPercentage = 0.0;
   bool _showCompletionPercentage = false;
+  
+  // 勇者のステータスデータ
+  Map<String, dynamic>? _heroData;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _calculateRemainingTime();
+    _fetchHeroData(); // 勇者のデータを取得
     
     // 1秒ごとに残り時間を更新
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _calculateRemainingTime();
     });
+  }
+  
+  // Firestoreから勇者のデータを取得
+  Future<void> _fetchHeroData() async {
+    try {
+      print('Firestoreから勇者データの取得を開始します');
+      
+      // statesコレクションから特定のドキュメントを取得
+      final DocumentSnapshot doc = await _firestore
+          .collection('states')
+          .doc('QtayhJ5Pu5K9vr0sKha1')
+          .get();
+
+      print('ドキュメント取得結果: ${doc.exists ? '存在します' : '存在しません'}');
+      
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        print('取得した勇者データ: $data');
+        
+        setState(() {
+          _heroData = data;
+          _isLoading = false;
+        });
+      } else {
+        print('勇者のデータが存在しません');
+        
+        // コレクション内の全ドキュメントを確認
+        final QuerySnapshot querySnapshot = await _firestore.collection('states').get();
+        print('statesコレクション内のドキュメント数: ${querySnapshot.docs.length}');
+        
+        if (querySnapshot.docs.isNotEmpty) {
+          print('利用可能なドキュメントID:');
+          for (var doc in querySnapshot.docs) {
+            print('- ${doc.id}');
+          }
+          
+          // 最初のドキュメントを使用
+          if (querySnapshot.docs.isNotEmpty) {
+            final firstDoc = querySnapshot.docs.first;
+            print('最初のドキュメントを使用します: ${firstDoc.id}');
+            setState(() {
+              _heroData = firstDoc.data() as Map<String, dynamic>;
+              _isLoading = false;
+            });
+            return;
+          }
+        }
+        
+        setState(() {
+          _errorMessage = '勇者のデータが見つかりませんでした';
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      print('エラーが発生しました: $e');
+      print('スタックトレース: $stackTrace');
+      
+      setState(() {
+        _errorMessage = 'データの取得中にエラーが発生しました: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -79,7 +147,7 @@ class _BattleScreenState extends State<BattleScreen> {
 Stream<QuerySnapshot> _fetchUncompletedTasks() {
   return _firestore.collection('tasks')
     .where('isCompleted', isEqualTo: false)
-    // .orderBy('createdAt', descending: true)
+    // orderByを完全に削除して複合インデックスの必要性を回避
     .snapshots();
 }
 
@@ -294,12 +362,14 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                           ),
                           
                           // プレイヤーのステータス
-                          Column(
+                          _isLoading 
+                          ? Center(child: CircularProgressIndicator(color: Colors.white))
+                          : Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'RYOGA Lv:4',
+                                '${_heroData?['name'] ?? '勇者'} Lv:${_heroData?['lv'] ?? 1}',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -326,7 +396,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                     ),
                                     Center(
                                       child: Text(
-                                        '80 / 80',
+                                        '${_heroData?['hp'] ?? 0} / ${_heroData?['hp'] ?? 0}',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
@@ -335,6 +405,14 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                       ),
                                     ),
                                   ],
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                '攻撃力: ${_heroData?['power'] ?? 0}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
@@ -520,8 +598,31 @@ class _TaskProgressItemState extends State<TaskProgressItem> {
     }
   }
   
+  // 残り時間を文字列で取得
+  String _formatRemainingTime() {
+    if (widget.isCompleted) return '完了';
+    
+    final DateTime endTime = widget.startTime.add(Duration(minutes: widget.durationMinutes));
+    final DateTime now = DateTime.now();
+    
+    if (now.isAfter(endTime)) return '期限切れ';
+    
+    final Duration remaining = endTime.difference(now);
+    
+    if (remaining.inHours > 0) {
+      return '残り ${remaining.inHours}時間${remaining.inMinutes % 60}分';
+    } else if (remaining.inMinutes > 0) {
+      return '残り ${remaining.inMinutes}分${remaining.inSeconds % 60}秒';
+    } else {
+      return '残り ${remaining.inSeconds}秒';
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
+    // 残り時間のテキスト
+    String remainingTimeText = _formatRemainingTime();
+    // 進捗率（パーセンテージ）
     String progressText = '${(_progressRatio * 100).toStringAsFixed(0)}%';
     
     return Column(
@@ -620,7 +721,7 @@ class _TaskProgressItemState extends State<TaskProgressItem> {
                     Positioned.fill(
                       child: Center(
                         child: Text(
-                          progressText,
+                          remainingTimeText, // 残り時間を表示
                           style: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -650,7 +751,7 @@ class _TaskProgressItemState extends State<TaskProgressItem> {
         Align(
           alignment: Alignment.centerRight,
           child: Text(
-            '残り: ${progressText}',
+            remainingTimeText, // 残り時間を表示
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey.shade700,
