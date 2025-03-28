@@ -1,7 +1,10 @@
-import 'battle.dart'; 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import 'battle.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class TaskScreen extends StatefulWidget {
   const TaskScreen({super.key});
@@ -19,9 +22,10 @@ class _TaskScreenState extends State<TaskScreen> {
   // Firestoreからタスクを取得
   Stream<QuerySnapshot> _fetchTasks() {
     print('Firestoreからタスクの取得を開始します');
-    return _firestore.collection('tasks')
-      .orderBy('createdAt', descending: true)
-      .snapshots();
+    return _firestore
+        .collection('tasks')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 
   // タスクを追加
@@ -56,7 +60,10 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 
   // タスクの完了状態を切り替え
-  Future<void> _toggleTaskCompletion(String documentId, bool currentStatus) async {
+  Future<void> _toggleTaskCompletion(
+    String documentId,
+    bool currentStatus,
+  ) async {
     try {
       await _firestore.collection('tasks').doc(documentId).update({
         'isCompleted': !currentStatus,
@@ -125,7 +132,7 @@ class _TaskScreenState extends State<TaskScreen> {
                     ListTile(
                       title: const Text('開始時間'),
                       subtitle: Text(
-                        DateFormat('yyyy/MM/dd HH:mm').format(_startTime)
+                        DateFormat('yyyy/MM/dd HH:mm').format(_startTime),
                       ),
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
@@ -169,6 +176,12 @@ class _TaskScreenState extends State<TaskScreen> {
                 TextButton(
                   onPressed: () {
                     _addTask();
+                    print('タスクを追加しました: ${_titleController.text}');
+                    showNotification(
+                      'タスクを追加しました',
+                      _titleController.text,
+                      _titleController.text,
+                    );
                     Navigator.pop(context);
                   },
                   child: const Text('追加'),
@@ -199,7 +212,7 @@ class _TaskScreenState extends State<TaskScreen> {
             print('Firestoreからのデータ取得中...');
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (snapshot.hasError) {
             print('Firestoreからのデータ取得でエラーが発生しました: ${snapshot.error}');
             return Center(child: Text("データ取得エラー: ${snapshot.error}"));
@@ -209,7 +222,7 @@ class _TaskScreenState extends State<TaskScreen> {
             print('Firestoreにタスクが存在しません');
             return const Center(child: Text("タスクがありません"));
           }
-          
+
           final tasks = snapshot.data!.docs;
           print('Firestoreからタスクを${tasks.length}件取得しました');
           return ListView.builder(
@@ -220,11 +233,19 @@ class _TaskScreenState extends State<TaskScreen> {
               final taskId = task.id;
 
               final taskTitle = data['title'] ?? 'タイトルなし';
-              final taskStartTime = data['startTime'] != null 
-                  ? (data['startTime'] as Timestamp).toDate() 
-                  : DateTime.now();
+              final taskStartTime =
+                  data['startTime'] != null
+                      ? (data['startTime'] as Timestamp).toDate()
+                      : DateTime.now();
               final taskDuration = data['durationMinutes'] ?? 0;
               final isCompleted = data['isCompleted'] ?? false;
+
+              // 通知のスケジュールを設定
+              // 未完了かつ開始時間が未来の場合に通知をスケジュール
+              if (!isCompleted && taskStartTime.isAfter(DateTime.now())) {
+                scheduleNotification(taskStartTime, index, taskTitle);
+                debugPrint('通知をスケジュールしました: $taskTitle, 開始時間: $taskStartTime');
+              }
 
               // return Card(
               //   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -261,7 +282,8 @@ class _TaskScreenState extends State<TaskScreen> {
                   title: Text(
                     taskTitle,
                     style: TextStyle(
-                      decoration: isCompleted ? TextDecoration.lineThrough : null,
+                      decoration:
+                          isCompleted ? TextDecoration.lineThrough : null,
                     ),
                   ),
                   subtitle: Text(
@@ -273,7 +295,9 @@ class _TaskScreenState extends State<TaskScreen> {
                     children: [
                       Checkbox(
                         value: isCompleted,
-                        onChanged: (value) => _toggleTaskCompletion(taskId, isCompleted),
+                        onChanged:
+                            (value) =>
+                                _toggleTaskCompletion(taskId, isCompleted),
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
@@ -286,26 +310,32 @@ class _TaskScreenState extends State<TaskScreen> {
                   // ListView.builder内のonTap部分を修正
                   onTap: () {
                     // 残り時間がプラスかどうかチェック
-                    final taskStartTime = (data['startTime'] as Timestamp).toDate();
+                    final taskStartTime =
+                        (data['startTime'] as Timestamp).toDate();
                     final taskDuration = data['durationMinutes'];
-                    final endTime = taskStartTime.add(Duration(minutes: taskDuration));
-                    
-                    if (!(data['isCompleted'] ?? false))  {
+                    final endTime = taskStartTime.add(
+                      Duration(minutes: taskDuration),
+                    );
+
+                    if (!(data['isCompleted'] ?? false)) {
                       // 残り時間があり、未完了のタスクのみバトル画面へ遷移
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => BattleScreen(
-                            taskData: {
-                              'id': task.id,
-                              'title': data['title'],
-                              'description': data['description'] ?? '',
-                              'startTime': taskStartTime,
-                              'durationMinutes': taskDuration,
-                              'isCompleted': data['isCompleted'],
-                              'createdAt': data['createdAt']?.toDate() ?? DateTime.now(),
-                            },
-                          ),
+                          builder:
+                              (context) => BattleScreen(
+                                taskData: {
+                                  'id': task.id,
+                                  'title': data['title'],
+                                  'description': data['description'] ?? '',
+                                  'startTime': taskStartTime,
+                                  'durationMinutes': taskDuration,
+                                  'isCompleted': data['isCompleted'],
+                                  'createdAt':
+                                      data['createdAt']?.toDate() ??
+                                      DateTime.now(),
+                                },
+                              ),
                         ),
                       );
                     } else if (data['isCompleted'] ?? false) {
@@ -313,9 +343,9 @@ class _TaskScreenState extends State<TaskScreen> {
                         SnackBar(content: Text('このタスクは既に完了しています')),
                       );
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('このタスクは既に期限切れです')),
-                      );
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('このタスクは既に期限切れです')));
                     }
                   },
                 ),
@@ -332,4 +362,50 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 }
 
+NotificationDetails _getPlatformNotificationDetails() {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'your_channel_id', // チャネルID
+    'your_channel_name', // チャネル名
+    channelDescription: '通知の説明', // チャネルの説明
+    importance: Importance.high,
+    priority: Priority.high,
+    ticker: 'ticker',
+  );
 
+  const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+
+  return const NotificationDetails(android: androidDetails, iOS: iosDetails);
+}
+
+Future<void> showNotification(String title, String body, String payload) async {
+  // 通知の表示
+  await FlutterLocalNotificationsPlugin().show(
+    0, // 通知ID
+    title, // 通知タイトル
+    body, // 通知本文
+    _getPlatformNotificationDetails(),
+    payload: "aaa", // 任意のデータ
+  );
+}
+
+Future<void> scheduleNotification(
+  DateTime scheduledTime,
+  int notificationId,
+  String task,
+) async {
+  // タイムゾーンを指定
+  final tz.TZDateTime scheduledDateTime = tz.TZDateTime.from(
+    scheduledTime,
+    tz.local,
+  );
+
+  // 通知をスケジュール
+  await FlutterLocalNotificationsPlugin().zonedSchedule(
+    notificationId, // 通知ID
+    'タスクの開始時間です', // 通知タイトル
+    task, // 通知本文
+    scheduledDateTime, // 通知をスケジュールする時刻
+    _getPlatformNotificationDetails(), // 通知の設定（Android、iOS）
+    androidScheduleMode: AndroidScheduleMode.exact, // 必須パラメータを追加
+  );
+}
