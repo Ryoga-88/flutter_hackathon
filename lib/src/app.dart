@@ -6,10 +6,13 @@ import 'screens/status.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Flutter Demo',
       theme: AppTheme.light(),
       home: const BottomNavigation(),
@@ -30,7 +33,7 @@ class _BottomNavigationState extends State<BottomNavigation> {
     // BattleScreen(),
     StatusScreen(),
   ];
-  
+
   int _selectedIndex = 0;
 
   @override
@@ -47,18 +50,12 @@ class _BottomNavigationState extends State<BottomNavigation> {
         indicatorColor: theme.colorScheme.secondary,
         selectedIndex: _selectedIndex,
         destinations: const <Widget>[
-          NavigationDestination(
-            icon: Icon(Icons.task_alt),
-            label: 'Task',
-          ),
+          NavigationDestination(icon: Icon(Icons.task_alt), label: 'Task'),
           // NavigationDestination(
           //   icon: Icon(Icons.sports_martial_arts),
           //   label: 'Battle',
           // ),
-          NavigationDestination(
-            icon: Icon(Icons.face),
-            label: 'Status',
-          ),
+          NavigationDestination(icon: Icon(Icons.face), label: 'Status'),
         ],
       ),
     );
