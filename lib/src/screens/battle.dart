@@ -153,9 +153,9 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                         // 左側の敵キャラクター（ゴブリン）
                         Positioned(
                           left: 20,
-                          top: 50,
+                          bottom: 40,
                           child: Image.asset(
-                            'lib/src/public/enemy/1.PNG',
+                            'lib/src/public/enemy/1.png',
                             width: 120,
                             height: 120,
                             errorBuilder: (context, error, stackTrace) {
@@ -178,7 +178,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                           right: 20,
                           bottom: 10,
                           child: Image.asset(
-                            'lib/src/public/enemy/2.PNG',
+                            'lib/src/public/hero/5.png',
                             width: 150,
                             height: 150,
                             errorBuilder: (context, error, stackTrace) {
