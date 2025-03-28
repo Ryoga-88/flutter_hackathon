@@ -1,7 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// ゴブリンのモックデータを定義するクラス
+class GoblinData {
+  final int level;
+  final int hp;
+  final int power;
+  final int exp;
+  final String imagePath;
+
+  GoblinData({
+    required this.level,
+    required this.hp,
+    required this.power,
+    required this.exp,
+    required this.imagePath,
+  });
+}
+
+// ゴブリンのモックデータリスト
+final List<GoblinData> goblins = [
+  GoblinData(
+    level: 1,
+    hp: 30,
+    power: 5,
+    exp: 10,
+    imagePath: 'lib/src/public/enemy/1.png',
+  ),
+  GoblinData(
+    level: 2,
+    hp: 40,
+    power: 8,
+    exp: 15,
+    imagePath: 'lib/src/public/enemy/2.png',
+  ),
+  GoblinData(
+    level: 3,
+    hp: 60,
+    power: 12,
+    exp: 25,
+    imagePath: 'lib/src/public/enemy/3.png',
+  ),
+  GoblinData(
+    level: 4,
+    hp: 80,
+    power: 18,
+    exp: 40,
+    imagePath: 'lib/src/public/enemy/4.png',
+  ),
+  GoblinData(
+    level: 5,
+    hp: 100,
+    power: 25,
+    exp: 60,
+    imagePath: 'lib/src/public/enemy/5.png',
+  ),
+];
 
 class BattleScreen extends StatefulWidget {
   final Map<String, dynamic>? taskData;
@@ -26,6 +83,11 @@ class _BattleScreenState extends State<BattleScreen> {
   Map<String, dynamic>? _heroData;
   bool _isLoading = true;
   String? _errorMessage;
+  
+  // 選択されたゴブリン
+  late GoblinData _selectedGoblin;
+  // ゴブリンの現在のHP
+  late int _currentGoblinHp;
 
   @override
   void initState() {
@@ -33,10 +95,20 @@ class _BattleScreenState extends State<BattleScreen> {
     _calculateRemainingTime();
     _fetchHeroData(); // 勇者のデータを取得
     
+    // ランダムにゴブリンを選択
+    _selectRandomGoblin();
+    
     // 1秒ごとに残り時間を更新
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _calculateRemainingTime();
     });
+  }
+  
+  // ランダムにゴブリンを選択する
+  void _selectRandomGoblin() {
+    final random = Random();
+    _selectedGoblin = goblins[random.nextInt(goblins.length)];
+    _currentGoblinHp = _selectedGoblin.hp;
   }
   
   // Firestoreから勇者のデータを取得
@@ -223,7 +295,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                           left: 20,
                           bottom: 40,
                           child: Image.asset(
-                            'lib/src/public/enemy/1.png',
+                            _selectedGoblin.imagePath,
                             width: 120,
                             height: 120,
                             errorBuilder: (context, error, stackTrace) {
@@ -232,7 +304,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                 height: 120,
                                 color: Colors.green.withOpacity(0.7),
                                 child: Center(
-                                  child: Text('ゴブリン',
+                                  child: Text('ゴブリン Lv.${_selectedGoblin.level}',
                                     style: TextStyle(color: Colors.white),
                                   ),
                                 ),
@@ -310,7 +382,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'ゴブリン Lv:2',
+                                'ゴブリン Lv:${_selectedGoblin.level}',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -329,7 +401,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                 child: Stack(
                                   children: [
                                     Container(
-                                      width: 120 * (10 / 40), // 10/40のHP
+                                      width: 120 * (_currentGoblinHp / _selectedGoblin.hp), // 現在のHP/最大HP
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
                                         color: Colors.orange,
@@ -337,7 +409,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                     ),
                                     Center(
                                       child: Text(
-                                        '10 / 40',
+                                        '$_currentGoblinHp / ${_selectedGoblin.hp}',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
@@ -346,6 +418,14 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                       ),
                                     ),
                                   ],
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                '攻撃力: ${_selectedGoblin.power}  経験値: ${_selectedGoblin.exp}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
