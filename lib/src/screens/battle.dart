@@ -342,7 +342,7 @@ class _BattleScreenState extends State<BattleScreen> {
             Expanded(
               flex: 1,
               child: Container(
-                padding: EdgeInsets.all(4),
+                padding: EdgeInsets.all(24),
                 color: Colors.white,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,8 +354,10 @@ class _BattleScreenState extends State<BattleScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Flexible(
+                    SizedBox(height: 8), // 小さな余白を追加
+                    Expanded(  // FlexibleからExpandedに変更
                       child: ListView.builder(
+                        padding: EdgeInsets.zero, // パディングを削除
                         itemCount: widget.taskData != null ? 1 : 0, 
                         itemBuilder: (context, index) {
                           final tasks = [
@@ -367,20 +369,21 @@ class _BattleScreenState extends State<BattleScreen> {
                                 'iconType': 'school',
                                 'progressText': '${(_getProgressRatio() * 100).toInt()}%',
                               },
-                            // {
-                            //   'title': '請求書を提出する',
-                            //   'remainingRatio': 0.5,
-                            //   'isCompleted': false,
-                            //   'iconType': 'receipt',
-                            //   'progressText': '20 / 40',
-                            // },
-                            // {
-                            //   'title': '推薦書を見てもらう',
-                            //   'remainingRatio': 1.0,
-                            //   'isCompleted': false,
-                            //   'iconType': 'assignment',
-                            //   'progressText': '0 / 60',
-                            // },
+                              // ダミーデータ
+                            {
+                              'title': '請求書を提出する',
+                              'remainingRatio': 0.5,
+                              'isCompleted': false,
+                              'iconType': 'receipt',
+                              'progressText': '20 / 40',
+                            },
+                            {
+                              'title': '推薦書を見てもらう',
+                              'remainingRatio': 1.0,
+                              'isCompleted': false,
+                              'iconType': 'assignment',
+                              'progressText': '0 / 60',
+                            },
                           ];
 
                           return Column(
@@ -532,4 +535,3 @@ class _BattleScreenState extends State<BattleScreen> {
     );
   }
 }
-
