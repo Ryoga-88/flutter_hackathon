@@ -354,7 +354,7 @@ class _BattleScreenState extends State<BattleScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Expanded(
+                    Flexible(
                       child: ListView.builder(
                         itemCount: widget.taskData != null ? 1 : 0, 
                         itemBuilder: (context, index) {
