@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BattleScreen extends StatefulWidget {
   final Map<String, dynamic>? taskData;
@@ -12,9 +13,11 @@ class BattleScreen extends StatefulWidget {
 }
 
 class _BattleScreenState extends State<BattleScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Timer? _timer;
   int _damage = 300; // ダメージ値
-  Duration _remainingTime = Duration.zero;
+  // ValueNotifierを使用して、タイマーの更新を必要な部分だけに限定
+  final ValueNotifier<Duration> _remainingTime = ValueNotifier<Duration>(Duration.zero);
   bool _isTaskCompleted = false;
   double _completionPercentage = 0.0;
   bool _showCompletionPercentage = false;
@@ -33,6 +36,7 @@ class _BattleScreenState extends State<BattleScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _remainingTime.dispose();
     super.dispose();
   }
 
@@ -45,9 +49,7 @@ class _BattleScreenState extends State<BattleScreen> {
     final int duration = widget.taskData!['durationMinutes'];
     final DateTime endTime = startTime.add(Duration(minutes: duration));
     
-    setState(() {
-      _remainingTime = endTime.difference(DateTime.now());
-    });
+    _remainingTime.value = endTime.difference(DateTime.now());
   }
 
   double _getProgressRatio() {
@@ -71,6 +73,14 @@ class _BattleScreenState extends State<BattleScreen> {
     final remainingDuration = endTime.difference(now);
     return remainingDuration.inSeconds / totalDuration.inSeconds;
   }
+}
+
+// Firestoreから未完了のタスクを取得
+Stream<QuerySnapshot> _fetchUncompletedTasks() {
+  return _firestore.collection('tasks')
+    .where('isCompleted', isEqualTo: false)
+    // .orderBy('createdAt', descending: true)
+    .snapshots();
 }
 
   // 残り時間の表示形式
@@ -355,68 +365,72 @@ class _BattleScreenState extends State<BattleScreen> {
                       ),
                     ),
                     SizedBox(height: 8), // 小さな余白を追加
-                    Expanded(  // FlexibleからExpandedに変更
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero, // パディングを削除
-                        itemCount: widget.taskData != null ? 1 : 0, 
-                        itemBuilder: (context, index) {
-                          final tasks = [
-                            if (widget.taskData != null)
-                              {
-                                'title': widget.taskData!['title'] ?? 'タスク名',
-                                'remainingRatio': _remainingTime.inSeconds / (widget.taskData!['durationMinutes'] * 60),
-                                'isCompleted': _isTaskCompleted,
-                                'iconType': 'school',
-                                'progressText': '${(_getProgressRatio() * 100).toInt()}%',
-                              },
-                              // ダミーデータ
-                            {
-                              'title': '請求書を提出する',
-                              'remainingRatio': 0.5,
-                              'isCompleted': false,
-                              'iconType': 'receipt',
-                              'progressText': '20 / 40',
-                            },
-                            {
-                              'title': '推薦書を見てもらう',
-                              'remainingRatio': 1.0,
-                              'isCompleted': false,
-                              'iconType': 'assignment',
-                              'progressText': '0 / 60',
-                            },
-                          ];
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: _fetchUncompletedTasks(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          
+                          if (snapshot.hasError) {
+                            return Center(child: Text("データ取得エラー: ${snapshot.error}"));
+                          }
 
-                          return Column(
-                            children: tasks.map((task) => _buildTaskItem(
-                              task['title'] as String,
-                              task['remainingRatio'] as double,
-                              task['isCompleted'] as bool,
-                              task['iconType'] as String,
-                              task['progressText'] as String,
-                            )).toList(),
+                          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                            return const Center(child: Text("未完了のタスクがありません"));
+                          }
+                          
+                          final tasks = snapshot.data!.docs;
+                          
+                          return ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: tasks.length,
+                            itemBuilder: (context, index) {
+                              final task = tasks[index];
+                              final data = task.data() as Map<String, dynamic>;
+                              final taskId = task.id;
+                              
+                              final taskTitle = data['title'] ?? 'タイトルなし';
+                              final taskStartTime = data['startTime'] != null 
+                                  ? (data['startTime'] as Timestamp).toDate() 
+                                  : DateTime.now();
+                              final taskDuration = data['durationMinutes'] ?? 0;
+                              final isCompleted = data['isCompleted'] ?? false;
+
+                              return TaskProgressItem(
+                                title: taskTitle,
+                                startTime: taskStartTime,
+                                durationMinutes: taskDuration,
+                                isCompleted: isCompleted,
+                                iconType: 'school',
+                                onComplete: (bool completed) {
+                                  // タスク完了時の処理
+                                  _completeTask();
+                                },
+                              );
+                              
+                              // // 残り時間の計算
+                              // final endTime = taskStartTime.add(Duration(minutes: taskDuration));
+                              // final remainingTime = endTime.difference(DateTime.now());
+                              // final totalDuration = endTime.difference(taskStartTime);
+                              // final remainingRatio = remainingTime.inSeconds > 0 
+                              //     ? remainingTime.inSeconds / totalDuration.inSeconds
+                              //     : 0.0;
+                              
+                              // return _buildTaskItem(
+                              //   taskTitle,
+                              //   remainingRatio,
+                              //   isCompleted,
+                              //   'school', // デフォルトのアイコンタイプ
+                              //   '${(remainingRatio * 100).toStringAsFixed(0)}%',
+                              // );
+                            },
                           );
                         },
                       ),
                     ),
 
-                    // タスクを進めるボタン
-                    // Row(
-                    //   children: [
-                    //     Expanded(
-                    //       child: ElevatedButton(
-                    //         onPressed: _isTaskCompleted ? null : _completeTask,
-                    //         style: ElevatedButton.styleFrom(
-                    //           backgroundColor: Colors.blue,
-                    //           foregroundColor: Colors.white,
-                    //           disabledBackgroundColor: Colors.grey,
-                    //         ),
-                    //         child: Text('タスクを進める？'),
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
-                    // SizedBox(height: 8),
-                    // // タスクの補充ボタン（task.dartに戻る）
                     ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
@@ -437,42 +451,150 @@ class _BattleScreenState extends State<BattleScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTaskItem(String title, double remainingRatio, bool isCompleted, String iconType, String progressText) {
-    IconData getIconData() {
-      switch(iconType) {
-        case 'school': return Icons.school;
-        case 'receipt': return Icons.receipt;
-        case 'assignment': return Icons.assignment;
-        default: return Icons.check;
+// タスク項目用の独立したStatefulWidget
+class TaskProgressItem extends StatefulWidget {
+  final String title;
+  final DateTime startTime;
+  final int durationMinutes;
+  final bool isCompleted;
+  final String iconType;
+  final Function(bool) onComplete;
+
+  const TaskProgressItem({
+    required this.title,
+    required this.startTime,
+    required this.durationMinutes,
+    required this.isCompleted,
+    required this.iconType,
+    required this.onComplete,
+  });
+
+  @override
+  State<TaskProgressItem> createState() => _TaskProgressItemState();
+}
+
+class _TaskProgressItemState extends State<TaskProgressItem> {
+  late Timer _timer;
+  double _progressRatio = 1.0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _calculateProgress();
+    
+    // 1秒ごとに進捗を更新
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _calculateProgress();
+        });
       }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+  
+  void _calculateProgress() {
+    if (widget.isCompleted) {
+      _progressRatio = 1.0;
+      return;
     }
+    
+    final DateTime endTime = widget.startTime.add(Duration(minutes: widget.durationMinutes));
+    final DateTime now = DateTime.now();
+    
+    if (now.isBefore(widget.startTime)) {
+      _progressRatio = 1.0;
+    } else if (now.isAfter(endTime)) {
+      _progressRatio = 0.0;
+    } else {
+      final totalDuration = endTime.difference(widget.startTime);
+      final remainingDuration = endTime.difference(now);
+      _progressRatio = remainingDuration.inSeconds / totalDuration.inSeconds;
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    String progressText = '${(_progressRatio * 100).toStringAsFixed(0)}%';
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            // チェックボックスを追加
             Checkbox(
-              value: isCompleted,
+              value: widget.isCompleted,
               onChanged: (bool? value) {
-                if (!isCompleted) {
-                  _completeTask();
+                if (!widget.isCompleted) {
+                  widget.onComplete(true);
                 }
               },
             ),
             SizedBox(width: 8),
             Text(
-              title,
+              widget.title,
               style: TextStyle(
                 fontWeight: FontWeight.w500,
-                decoration: isCompleted ? TextDecoration.lineThrough : null,
+                decoration: widget.isCompleted ? TextDecoration.lineThrough : null,
               ),
             ),
           ],
         ),
         SizedBox(height: 4),
+        // Row(
+        //   children: [
+        //     Expanded(
+        //       child: ClipRRect(
+        //         borderRadius: BorderRadius.circular(4),
+        //         child: Stack(
+        //           children: [
+        //             Container(
+        //               height: 20,
+        //               color: Colors.grey.shade300,
+        //             ),
+        //             Container(
+        //               height: 20,
+        //               width: MediaQuery.of(context).size.width * 0.7 * _progressRatio,
+        //               color: _progressRatio >= 0.9 ? Colors.blue : 
+        //                     _progressRatio <= 0.2 ? Colors.red : Colors.orange,
+        //             ),
+        //             Positioned.fill(
+        //               child: Center(
+        //                 child: Text(
+        //                   progressText,
+        //                   style: TextStyle(
+        //                     color: Colors.black,
+        //                     fontWeight: FontWeight.bold,
+        //                     fontSize: 12,
+        //                   ),
+        //                 ),
+        //               ),
+        //             ),
+        //           ],
+        //         ),
+        //       ),
+        //     ),
+        //     SizedBox(width: 8),
+        //     Container(
+        //       width: 36,
+        //       height: 36,
+        //       decoration: BoxDecoration(
+        //         color: Colors.black,
+        //         shape: BoxShape.circle,
+        //       ),
+        //       child: Center(
+        //         child: Icon(_getIconData(), color: Colors.white, size: 18),
+        //       ),
+        //     ),
+        //   ],
+        // ),
         Row(
           children: [
             Expanded(
@@ -484,17 +606,21 @@ class _BattleScreenState extends State<BattleScreen> {
                       height: 20,
                       color: Colors.grey.shade300,
                     ),
-                    // ここで_getProgressRatio()を直接呼び出す
-                    Container(
-                      height: 20,
-                      width: MediaQuery.of(context).size.width * 0.7 * _getProgressRatio(),
-                      color: _getProgressRatio() == 1.0 ? Colors.blue : 
-                            _getProgressRatio() == 0.0 ? Colors.red : Colors.orange,
+                    FractionallySizedBox(
+                      widthFactor: _progressRatio, // 進捗率を直接指定
+                      child: Container(
+                        height: 20,
+                        color: _progressRatio >= 0.9
+                            ? Colors.blue
+                            : _progressRatio <= 0.2
+                                ? Colors.red
+                                : Colors.orange,
+                      ),
                     ),
                     Positioned.fill(
                       child: Center(
                         child: Text(
-                          '${(_getProgressRatio() * 100).toStringAsFixed(0)}%',
+                          progressText,
                           style: TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
@@ -516,7 +642,7 @@ class _BattleScreenState extends State<BattleScreen> {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: Icon(getIconData(), color: Colors.white, size: 18),
+                child: Icon(_getIconData(), color: Colors.white, size: 18),
               ),
             ),
           ],
@@ -524,7 +650,7 @@ class _BattleScreenState extends State<BattleScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: Text(
-            '残り: ${_formatRemainingTime(_remainingTime)}',
+            '残り: ${progressText}',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey.shade700,
@@ -533,5 +659,14 @@ class _BattleScreenState extends State<BattleScreen> {
         ),
       ],
     );
+  }
+  
+  IconData _getIconData() {
+    switch(widget.iconType) {
+      case 'school': return Icons.school;
+      case 'receipt': return Icons.receipt;
+      case 'assignment': return Icons.assignment;
+      default: return Icons.check;
+    }
   }
 }
