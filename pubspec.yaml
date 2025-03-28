@@ -27,16 +27,17 @@ flutter:
   uses-material-design: true
   assets:
     - lib/src/public/enemy/
+    - lib/src/public/hero/
     - lib/src/public/background.jpg
-    - assets/images/Ryoga.png
-    - assets/images/Ryoga.png
+    - assets/images/Logo.png
+    - assets/images/Logo.png
 
 flutter_native_splash:
   color: "#f5f5ef"
-  image: "assets/images/Ryoga.png"
+  image: "assets/images/Logo.png"
   fullscreen: true
   android_12:
     icon_background_color: "#add8e6"
-    image: "assets/images/Ryoga.png"
+    image: "assets/images/Logo.png"
     icon_background_color_dark: "#f5f5ef"
-    image_dark: "assets/images/Ryoga.png"
+    image_dark: "assets/images/Logo.png"
