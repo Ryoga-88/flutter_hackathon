@@ -617,14 +617,25 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                               final isCompleted = data['isCompleted'] ?? false;
 
                               return TaskProgressItem(
+                                taskId: taskId,
                                 title: taskTitle,
                                 startTime: taskStartTime,
                                 durationMinutes: taskDuration,
                                 isCompleted: isCompleted,
                                 iconType: 'school',
-                                onComplete: (bool completed) {
+                                onComplete: (bool completed, String taskId) {
                                   // タスク完了時の処理
                                   _completeTask();
+                                  
+                                  // Firestoreのタスクを完了状態に更新
+                                  _firestore.collection('tasks').doc(taskId).update({
+                                    'isCompleted': true,
+                                    'completedAt': FieldValue.serverTimestamp(),
+                                  }).then((_) {
+                                    print('タスクを完了状態に更新しました: $taskId');
+                                  }).catchError((error) {
+                                    print('タスクの更新中にエラーが発生しました: $error');
+                                  });
                                 },
                               );
                               
@@ -673,14 +684,16 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
 
 // タスク項目用の独立したStatefulWidget
 class TaskProgressItem extends StatefulWidget {
+  final String taskId;
   final String title;
   final DateTime startTime;
   final int durationMinutes;
   final bool isCompleted;
   final String iconType;
-  final Function(bool) onComplete;
+  final Function(bool, String) onComplete;
 
   const TaskProgressItem({
+    required this.taskId,
     required this.title,
     required this.startTime,
     required this.durationMinutes,
@@ -774,7 +787,7 @@ class _TaskProgressItemState extends State<TaskProgressItem> {
               value: widget.isCompleted,
               onChanged: (bool? value) {
                 if (!widget.isCompleted) {
-                  widget.onComplete(true);
+                  widget.onComplete(true, widget.taskId);
                 }
               },
             ),
