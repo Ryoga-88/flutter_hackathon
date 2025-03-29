@@ -25,35 +25,35 @@ class GoblinData {
 final List<GoblinData> goblins = [
   GoblinData(
     level: 1,
-    hp: 30,
+    hp: 100,
     power: 5,
     exp: 10,
     imagePath: 'lib/src/public/enemy/1.png',
   ),
   GoblinData(
     level: 2,
-    hp: 40,
+    hp: 300,
     power: 8,
     exp: 15,
     imagePath: 'lib/src/public/enemy/2.png',
   ),
   GoblinData(
     level: 3,
-    hp: 60,
+    hp: 600,
     power: 12,
     exp: 25,
     imagePath: 'lib/src/public/enemy/3.png',
   ),
   GoblinData(
     level: 4,
-    hp: 80,
+    hp: 1200,
     power: 18,
     exp: 40,
     imagePath: 'lib/src/public/enemy/4.png',
   ),
   GoblinData(
     level: 5,
-    hp: 100,
+    hp: 2000,
     power: 25,
     exp: 60,
     imagePath: 'lib/src/public/enemy/5.png',
@@ -76,8 +76,10 @@ class _BattleScreenState extends State<BattleScreen> {
   // ValueNotifierを使用して、タイマーの更新を必要な部分だけに限定
   final ValueNotifier<Duration> _remainingTime = ValueNotifier<Duration>(Duration.zero);
   bool _isTaskCompleted = false;
-  double _completionPercentage = 0.0;
-  bool _showCompletionPercentage = false;
+  bool _showPowerUp = false; // 攻撃力アップ表示のフラグ
+  bool _showGoblinAttack = false; // ゴブリンの攻撃力表示のフラグ
+  Timer? _goblinAttackTimer; // ゴブリンの攻撃表示用タイマー
+  int _heroCurrentHp = 0; // 勇者の現在のHP（見た目用）
   
   // 勇者のステータスデータ
   Map<String, dynamic>? _heroData;
@@ -101,6 +103,28 @@ class _BattleScreenState extends State<BattleScreen> {
     // 1秒ごとに残り時間を更新
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _calculateRemainingTime();
+    });
+    
+    // ゴブリンの攻撃表示用タイマーを設定（10秒おき）
+    _goblinAttackTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      setState(() {
+        _showGoblinAttack = true;
+        
+        // ゴブリンの攻撃で勇者のHPを減らす
+        if (_heroData != null && _heroCurrentHp > 0) {
+          _heroCurrentHp = _heroCurrentHp - _selectedGoblin.power;
+          if (_heroCurrentHp < 0) _heroCurrentHp = 0;
+        }
+        
+        // 2秒後に攻撃表示を消す
+        Future.delayed(Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() {
+              _showGoblinAttack = false;
+            });
+          }
+        });
+      });
     });
   }
   
@@ -130,6 +154,7 @@ class _BattleScreenState extends State<BattleScreen> {
         
         setState(() {
           _heroData = data;
+          _heroCurrentHp = data['hp'] ?? 100; // 勇者の現在HPを初期化
           _isLoading = false;
         });
       } else {
@@ -151,6 +176,7 @@ class _BattleScreenState extends State<BattleScreen> {
             print('最初のドキュメントを使用します: ${firstDoc.id}');
             setState(() {
               _heroData = firstDoc.data() as Map<String, dynamic>;
+              _heroCurrentHp = _heroData?['hp'] ?? 100; // 勇者の現在HPを初期化
               _isLoading = false;
             });
             return;
@@ -176,6 +202,7 @@ class _BattleScreenState extends State<BattleScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _goblinAttackTimer?.cancel();
     _remainingTime.dispose();
     super.dispose();
   }
@@ -240,16 +267,20 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
   void _completeTask() {
     setState(() {
       _isTaskCompleted = true;
-      final progress = _getProgressRatio();
-      // 進捗率をパーセンテージに変換して保存
-      _completionPercentage = progress * 100;
-      _showCompletionPercentage = true;
+      _showPowerUp = true; // 攻撃力アップ表示を有効化
+      
+      // 勇者の攻撃でゴブリンのHPを減らす
+      int heroPower = _heroData?['power'] ?? 0;
+      heroPower += 50; // 攻撃力+500の効果を適用
+      
+      _currentGoblinHp = _currentGoblinHp - heroPower;
+      if (_currentGoblinHp < 0) _currentGoblinHp = 0;
       
       // 5秒後に表示を消す
       Future.delayed(Duration(seconds: 5), () {
         if (mounted) {
           setState(() {
-            _showCompletionPercentage = false;
+            _showPowerUp = false; // 攻撃力アップ表示を消す
           });
         }
       });
@@ -294,22 +325,48 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                         Positioned(
                           left: 20,
                           bottom: 40,
-                          child: Image.asset(
-                            _selectedGoblin.imagePath,
-                            width: 120,
-                            height: 120,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.asset(
+                                _selectedGoblin.imagePath,
                                 width: 120,
                                 height: 120,
-                                color: Colors.green.withOpacity(0.7),
-                                child: Center(
-                                  child: Text('ゴブリン Lv.${_selectedGoblin.level}',
-                                    style: TextStyle(color: Colors.white),
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 120,
+                                    height: 120,
+                                    color: Colors.green.withOpacity(0.7),
+                                    child: Center(
+                                      child: Text('ゴブリン Lv.${_selectedGoblin.level}',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              // ゴブリンの攻撃力表示
+                              if (_showGoblinAttack)
+                                Positioned(
+                                  top: 0,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.8),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: Text(
+                                      '攻撃力: ${_selectedGoblin.power}',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
+                            ],
                           ),
                         ),
                         
@@ -317,49 +374,51 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                         Positioned(
                           right: 20,
                           bottom: 10,
-                          child: Image.asset(
-                            'lib/src/public/hero/5.png',
-                            width: 150,
-                            height: 150,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.asset(
+                                'lib/src/public/hero/5.png',
                                 width: 150,
                                 height: 150,
-                                color: Colors.purple.withOpacity(0.7),
-                                child: Center(
-                                  child: Text('RYOGA',
-                                    style: TextStyle(color: Colors.white),
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 150,
+                                    height: 150,
+                                    color: Colors.purple.withOpacity(0.7),
+                                    child: Center(
+                                      child: Text('RYOGA',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              // 攻撃力アップ表示
+                              if (_showPowerUp)
+                                Positioned(
+                                  top: 0,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.8),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: Text(
+                                      '攻撃力+50',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
+                            ],
                           ),
                         ),
                         
-                        // バトルテキスト（ダメージなど）
-                        if (_showCompletionPercentage)
-                        Positioned(
-                          top: size.height * 0.5 * 0.3,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'タスク完了！ 効率: ${_completionPercentage.toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -468,7 +527,8 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                 child: Stack(
                                   children: [
                                     Container(
-                                      width: 120, // 満タン
+                                      width: _heroData != null ? 
+                                        120 * (_heroCurrentHp / (_heroData!['hp'] ?? 100)) : 120, // 現在のHP/最大HP
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
                                         color: Colors.blue,
@@ -476,7 +536,7 @@ Stream<QuerySnapshot> _fetchUncompletedTasks() {
                                     ),
                                     Center(
                                       child: Text(
-                                        '${_heroData?['hp'] ?? 0} / ${_heroData?['hp'] ?? 0}',
+                                        '$_heroCurrentHp / ${_heroData?['hp'] ?? 0}',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
